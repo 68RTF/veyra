@@ -73,7 +73,7 @@ impl Cache {
     }
 }
 
-// Outer None means pending. Inner None means the path is absent or failed to decode.
+// Outer None means the request is pending. Inner None means the path is missing or decoding failed.
 pub(crate) fn get(path: Option<&Path>, current: bool) -> Option<Option<Rc<Artwork>>> {
     let Some(path) = path else { return Some(None) };
     CACHE.with(|cache| {
