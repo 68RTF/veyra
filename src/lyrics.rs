@@ -11,7 +11,7 @@ pub(crate) fn online_lyrics(track: &Track) -> Result<Vec<Lyric>, String> {
     }
     let title = track.title.trim();
     if title.is_empty() {
-        return Err("У трека нет названия для поиска текста.".into());
+        return Err("Не получилось начать поиск текста: у трека нет названия.".into());
     }
     let artist = track.artist.trim();
     let known_artist = !artist.is_empty() && artist != "Неизвестный исполнитель";
@@ -59,7 +59,7 @@ pub(crate) fn online_lyrics(track: &Track) -> Result<Vec<Lyric>, String> {
             return Ok(lines);
         }
     }
-    Err("В LRCLIB нет подходящего текста для этого трека. Проверь теги или добавь .lrc рядом с аудиофайлом.".into())
+    Err("В LRCLIB не нашлось подходящего текста. Проверь теги трека или положи .lrc рядом с аудиофайлом.".into())
 }
 
 fn request(endpoint: &str, params: &[(&str, &str)]) -> Result<Option<Value>, String> {
@@ -102,7 +102,7 @@ fn request(endpoint: &str, params: &[(&str, &str)]) -> Result<Option<Value>, Str
             .map_err(|error| format!("Не удалось прочитать ответ LRCLIB: {error}")),
         "404" => Ok(None),
         "429" => Err("LRCLIB временно ограничил запросы. Попробуй позже.".into()),
-        code => Err(format!("LRCLIB ответил с ошибкой HTTP {code}.")),
+        code => Err(format!("LRCLIB вернул ошибку HTTP {code}.")),
     }
 }
 
