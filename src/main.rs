@@ -2400,7 +2400,7 @@ fn append_paths(model: &Rc<RefCell<Model>>, paths: Vec<PathBuf>) {
                     state.status = Some(if found {
                         "Эти треки уже есть в очереди".into()
                     } else {
-                        "Не нашлось аудиофайлов поддерживаемых форматов. Проверь папку.".into()
+                        "Аудиофайлы поддерживаемых форматов не найдены. Проверь папку.".into()
                     });
                     return glib::ControlFlow::Break;
                 }
