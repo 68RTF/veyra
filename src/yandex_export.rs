@@ -18,7 +18,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         .ok_or("Ссылка на плейлист должна содержать /playlists/<id>.")?;
     let playlist_id = after.split(['?', '#', '/']).next().unwrap_or("");
     if playlist_id.is_empty() {
-        return Err("В ссылке нет идентификатора плейлиста.".into());
+        return Err("В ссылке не указан ID плейлиста.".into());
     }
     let api = format!("https://api.music.yandex.net/playlist/{playlist_id}");
     let response = Command::new("curl")

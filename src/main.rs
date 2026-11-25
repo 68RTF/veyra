@@ -491,7 +491,7 @@ fn build_player_page(model: &Rc<RefCell<Model>>) -> (gtk::Widget, gtk::Stack) {
     show_lyrics.set_no_show_all(true);
     start.set_visible(model.borrow().current.is_none());
     show_lyrics.set_visible(model.borrow().current.is_some());
-    // The details column consumes only the width left over after allocating the cover.
+    // The details column uses the space left after laying out the cover.
     hero.pack_start(&details, true, true, 0);
     artwork.pack_start(&hero, true, true, 0);
     views.add_named(&artwork, "artwork");
@@ -568,7 +568,7 @@ fn build_player_page(model: &Rc<RefCell<Model>>) -> (gtk::Widget, gtk::Stack) {
     (page.upcast(), views)
 }
 
-// Keep the visible image until the selected track's cover lookup and decode settle.
+// Keep the current cover visible until lookup and decoding finish.
 fn current_artwork(
     track: &Track,
     rendered: &mut Option<(Option<PathBuf>, Option<PathBuf>)>,
@@ -909,9 +909,9 @@ fn build_lyrics_view(model: &Rc<RefCell<Model>>, views: &gtk::Stack) -> gtk::Wid
                         } else if !ready {
                             "Читаем данные трека…"
                         } else {
-                            status.3.unwrap_or("Готовим поиск текста…")
+                            status.3.unwrap_or("Подготовка к поиску текста…")
                         });
-                        hint_update.set_text("Текст ищется автоматически в LRCLIB. Можно добавить .lrc рядом с аудиофайлом.");
+                        hint_update.set_text("Плеер сам ищет текст в LRCLIB. Можно также положить .lrc рядом с аудиофайлом.");
                     }
                     body_update.set_visible_child_name(if status.0 { "empty" } else { "list" });
                 }
@@ -964,9 +964,9 @@ fn build_lyrics_view(model: &Rc<RefCell<Model>>, views: &gtk::Stack) -> gtk::Wid
                     hint_update.set_text(if synchronized {
                         "Двойной щелчок по строке — перейти к этому моменту"
                     } else if track.lyrics.is_empty() {
-                        "Текст ищется автоматически в LRCLIB. Можно добавить .lrc рядом с аудиофайлом."
+                        "Плеер сам ищет текст в LRCLIB. Можно также положить .lrc рядом с аудиофайлом."
                     } else {
-                        "Этот текст без временных меток — листай в своём темпе."
+                        "В тексте нет временных меток. Листай его вручную."
                     });
                     for child in list_update.children() {
                         list_update.remove(&child);
@@ -1660,7 +1660,7 @@ fn build_queue_page(model: &Rc<RefCell<Model>>) -> gtk::Widget {
             rendered_current = current;
             queue_highlight(&rows_update, current);
         }
-        // Load only visible rows (+ a small buffer), with bounded background work.
+        // Load visible rows and a small buffer, limiting background work.
         if scroll.is_mapped() {
             let state = model_update.borrow();
             let adjustment = scroll.vadjustment();
@@ -2400,8 +2400,7 @@ fn append_paths(model: &Rc<RefCell<Model>>, paths: Vec<PathBuf>) {
                     state.status = Some(if found {
                         "Эти треки уже есть в очереди".into()
                     } else {
-                        "Поддерживаемые аудиофайлы не найдены. Проверь папку и форматы файлов."
-                            .into()
+                        "Аудиофайлы поддерживаемых форматов не найдены. Проверь папку.".into()
                     });
                     return glib::ControlFlow::Break;
                 }
@@ -2971,7 +2970,7 @@ fn show_soundcloud_dialog(model: &Rc<RefCell<Model>>) {
     content.pack_start(&heading, false, false, 0);
 
     let note = gtk::Label::new(Some(
-        "Скачиваются только оригиналы треков, которые автор разрешил скачивать. Стримы, обход DRM и ограничений не используются.",
+        "Можно скачать только оригиналы треков, для которых автор разрешил загрузку. Плеер не скачивает стримы и не обходит DRM или другие ограничения.",
     ));
     note.set_line_wrap(true);
     note.set_max_width_chars(52);

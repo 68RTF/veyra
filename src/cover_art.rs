@@ -66,7 +66,7 @@ pub(crate) fn online_cover(track: &Track) -> Option<PathBuf> {
     if cache.is_file() {
         return Some(cache);
     }
-    // Keep parallel requests for the same album from downloading or writing it twice.
+    // Prevent concurrent requests from downloading or writing the same album cover twice.
     let slot = album_id.bytes().fold(0usize, |hash, byte| {
         hash.wrapping_mul(31).wrapping_add(usize::from(byte))
     }) % ALBUM_DOWNLOADS.len();

@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 use std::time::UNIX_EPOCH;
 
 pub(crate) fn collect_audio(path: &Path, out: &mut Vec<PathBuf>) {
-    // Canonical directory identities prevent cycles through symbolic links.
+    // Use canonical directory identities to avoid symlink cycles.
     let mut pending = vec![path.to_path_buf()];
     let mut visited = std::collections::HashSet::new();
     while let Some(path) = pending.pop() {

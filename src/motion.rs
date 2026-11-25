@@ -1,7 +1,7 @@
 use gtk::prelude::*;
 use std::{cell::Cell, rc::Rc};
 
-/// One finite animation per widget/property. Retarget from the visible value.
+/// Keep one finite animation per widget and property. Start retargeting from the visible value.
 pub(crate) struct Tween {
     value: Cell<f64>,
     target: Cell<f64>,
