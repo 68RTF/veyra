@@ -106,7 +106,7 @@ impl ScError {
                     .into()
             }
             Self::DownloadStatusUnknown => "SoundCloud не сообщил, доступно ли скачивание.".into(),
-            Self::DownloadsExhausted => "Лимит скачиваний этого трека исчерпан.".into(),
+            Self::DownloadsExhausted => "Достигнут лимит скачиваний этого трека.".into(),
             Self::AuthRequired => {
                 "SoundCloud требует авторизацию. Нажми «Авторизация…» и вставь токен своей сессии."
                     .into()
@@ -119,7 +119,7 @@ impl ScError {
             Self::Unsupported(detail) => format!("Файл не поддерживается: {detail}."),
             Self::Network(detail) => format!("Сетевая ошибка: {detail}."),
             Self::Http(status, body) if body.is_empty() => {
-                format!("SoundCloud ответил HTTP {status}.")
+                format!("SoundCloud вернул HTTP {status}.")
             }
             Self::Http(status, body) => format!("SoundCloud ответил HTTP {status}: {body}"),
             Self::Io(detail) => format!("Ошибка файла: {detail}."),
@@ -225,7 +225,7 @@ fn start_worker(
     };
     if ACTIVE.swap(true, Ordering::AcqRel) {
         let _ = tx.send(Event::Failed(
-            "Уже идёт загрузка. Дождись завершения или отмени её.".into(),
+            "Загрузка уже идёт. Дождись её завершения или отмени.".into(),
         ));
         return job;
     }
