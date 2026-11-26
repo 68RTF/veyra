@@ -2,14 +2,16 @@ use crate::{Lyric, Track};
 use serde_json::Value;
 use std::fs;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{self, Read, Write};
+use std::os::fd::OwnedFd;
 use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, Instant, UNIX_EPOCH};
 
 pub(crate) fn collect_audio(path: &Path, out: &mut Vec<PathBuf>) {
-    // Use canonical directory identities to avoid symlink cycles.
+    // Canonical directory identities prevent cycles through symbolic links.
     let mut pending = vec![path.to_path_buf()];
     let mut visited = std::collections::HashSet::new();
     while let Some(path) = pending.pop() {
@@ -74,8 +76,10 @@ pub(crate) fn read_track(path: PathBuf) -> Track {
         if let Ok(data) = fs::read(cache_path) {
             if let Ok(mut track) = serde_json::from_slice::<Track>(&data) {
                 if track.path == path {
-                    if track.lyrics.is_empty() {
-                        if let Some(lines) = crate::lyrics::read_cache(&track) {
+                    if let Some(lines) = crate::lyrics::read_cache(&track) {
+                        if crate::lyric_timing::rank(&lines)
+                            > crate::lyric_timing::rank(&track.lyrics)
+                        {
                             track.lyrics = lines;
                         }
                     }
@@ -89,33 +93,34 @@ pub(crate) fn read_track(path: PathBuf) -> Track {
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("Без названия");
-    let output = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-show_format",
-            "-show_streams",
-            "-of",
-            "json",
-        ])
-        .arg(&path)
-        .output()
-        .ok();
-    let output_ok = output
-        .as_ref()
-        .map(|result| result.status.success())
-        .unwrap_or(false);
+    let output = run_media_tool(
+        Command::new("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-show_format",
+                "-show_streams",
+                "-of",
+                "json",
+            ])
+            .arg(&path),
+        Duration::from_secs(8),
+    )
+    .ok()
+    .flatten();
+    let output_ok = output.is_some();
     let mut title = preview.title;
     let mut artist = preview.artist;
     let mut album = String::new();
     let mut duration = 0.0;
     let mut embedded_lyrics = String::new();
     if let Some(output) = output {
-        if let Ok(value) = serde_json::from_slice::<Value>(&output.stdout) {
+        if let Ok(value) = serde_json::from_slice::<Value>(&output) {
             if let Some(format) = value.get("format") {
                 duration = format["duration"]
                     .as_str()
-                    .and_then(|v| v.parse().ok())
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .filter(|duration| duration.is_finite() && *duration >= 0.0)
                     .unwrap_or(0.0);
                 if let Some(tags) = format.get("tags") {
                     if let Some(tag_title) = tag(tags, &["title"]) {
@@ -147,14 +152,19 @@ pub(crate) fn read_track(path: PathBuf) -> Track {
     }
     let lrc = path.with_extension("lrc");
     let txt = path.with_extension("txt");
-    let text = [lrc, txt]
+    let lyrics = [lrc, txt]
         .into_iter()
         .find_map(|candidate| {
             fs::read_to_string(candidate)
                 .ok()
-                .filter(|text| !text.trim().is_empty())
+                .map(|text| parse_lyrics(&text))
+                .filter(|lines| crate::lyric_timing::quality(lines) > 0)
         })
-        .unwrap_or(embedded_lyrics);
+        .or_else(|| {
+            let lines = parse_lyrics(&embedded_lyrics);
+            (crate::lyric_timing::quality(&lines) > 0).then_some(lines)
+        })
+        .unwrap_or_default();
     let mut track = Track {
         path,
         title,
@@ -162,10 +172,10 @@ pub(crate) fn read_track(path: PathBuf) -> Track {
         album,
         duration,
         cover_path: None,
-        lyrics: parse_lyrics(&text),
+        lyrics,
     };
-    if track.lyrics.is_empty() {
-        if let Some(cached) = crate::lyrics::read_cache(&track) {
+    if let Some(cached) = crate::lyrics::read_cache(&track) {
+        if crate::lyric_timing::rank(&cached) > crate::lyric_timing::rank(&track.lyrics) {
             track.lyrics = cached;
         }
     }
@@ -179,7 +189,8 @@ fn metadata_cache_path(path: &Path) -> Option<PathBuf> {
     let root = std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))?;
-    let mut signature = format!("v1:{}", path.to_string_lossy());
+    // Reparse sidecars cached before fallback from empty LRC files was fixed.
+    let mut signature = format!("v5:{}", path.to_string_lossy());
     for candidate in [
         path.to_path_buf(),
         path.with_extension("lrc"),
@@ -273,12 +284,10 @@ pub(crate) fn extract_cover(path: &Path) -> Option<PathBuf> {
             return Some(candidate);
         }
     }
-    if let Some(stem) = path.file_stem() {
-        for extension in ["jpg", "jpeg", "png", "webp"] {
-            let candidate = path.parent()?.join(stem).with_extension(extension);
-            if candidate.is_file() {
-                return Some(candidate);
-            }
+    for extension in ["jpg", "jpeg", "png", "webp"] {
+        let candidate = path.with_extension(extension);
+        if candidate.is_file() {
+            return Some(candidate);
         }
     }
     let root = std::env::var_os("XDG_CACHE_HOME")
@@ -301,40 +310,99 @@ pub(crate) fn extract_cover(path: &Path) -> Option<PathBuf> {
         });
     let name = format!("{key:016x}-{}-{modified}.jpg", metadata.len());
     let output = cache.join(name);
-    if output.is_file() {
+    if fs::metadata(&output).is_ok_and(|metadata| metadata.len() > 0) {
         return Some(output);
     }
-    let result = Command::new("ffmpeg")
-        .args(["-v", "error", "-y", "-i"])
-        .arg(path)
-        .args([
-            "-map",
-            "0:v:0",
-            "-frames:v",
-            "1",
-            "-vf",
-            "scale=900:900:force_original_aspect_ratio=decrease",
-        ])
-        .arg(&output)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .ok()?;
-    if result.success() && output.is_file() {
+    let temporary = output.with_extension(format!(
+        "{}-{}.part.jpg",
+        std::process::id(),
+        COVER_TEMP_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let result = run_media_tool(
+        Command::new("ffmpeg")
+            .args(["-nostdin", "-v", "error", "-y", "-i"])
+            .arg(path)
+            .args([
+                "-map",
+                "0:v:0",
+                "-frames:v",
+                "1",
+                "-vf",
+                "scale=900:900:force_original_aspect_ratio=decrease",
+            ])
+            .arg(&temporary),
+        Duration::from_secs(12),
+    );
+    if matches!(result, Ok(Some(_))) && fs::rename(&temporary, &output).is_ok() {
         Some(output)
     } else {
+        let _ = fs::remove_file(&temporary);
         None
     }
 }
 
+static COVER_TEMP_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn run_media_tool(command: &mut Command, timeout: Duration) -> io::Result<Option<Vec<u8>>> {
+    const MAX_OUTPUT: usize = 2 * 1024 * 1024;
+    let (mut reader, writer) = UnixStream::pair()?;
+    reader.set_nonblocking(true)?;
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(OwnedFd::from(writer)))
+        .stderr(Stdio::null())
+        .spawn()?;
+    // Command retains the writer after spawn. Close the parent's copy.
+    command.stdout(Stdio::null());
+    let deadline = Instant::now() + timeout;
+    let result = (|| {
+        let mut buffer = Vec::new();
+        let mut chunk = [0; 8192];
+        let mut status: Option<bool> = None;
+        loop {
+            if Instant::now() >= deadline {
+                return Err(io::ErrorKind::TimedOut.into());
+            }
+            match reader.read(&mut chunk) {
+                Ok(0) => {}
+                Ok(length) => {
+                    buffer.extend_from_slice(&chunk[..length]);
+                    if buffer.len() > MAX_OUTPUT {
+                        return Err(io::ErrorKind::InvalidData.into());
+                    }
+                    continue;
+                }
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {}
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(error),
+            }
+            if let Some(status) = status {
+                return Ok(status.then_some(buffer));
+            }
+            if let Some(done) = child.try_wait()? {
+                // Drain bytes written between the previous read and process exit.
+                status = Some(done.success());
+            } else {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+    })();
+    if result.is_err() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    result
+}
+
 fn tag(value: &Value, keys: &[&str]) -> Option<String> {
     let object = value.as_object()?;
-    for (name, item) in object {
-        if keys.iter().any(|key| key.eq_ignore_ascii_case(name)) {
-            if let Some(text) = item.as_str() {
-                if !text.trim().is_empty() {
-                    return Some(text.trim().to_string());
-                }
+    for key in keys {
+        for (name, item) in object {
+            if !key.eq_ignore_ascii_case(name) {
+                continue;
+            }
+            if let Some(text) = item.as_str().map(str::trim).filter(|text| !text.is_empty()) {
+                return Some(text.to_string());
             }
         }
     }
@@ -342,9 +410,23 @@ fn tag(value: &Value, keys: &[&str]) -> Option<String> {
 }
 
 pub(crate) fn parse_lyrics(text: &str) -> Vec<Lyric> {
+    let text = text.trim_start_matches('\u{feff}');
+    let offset = text
+        .lines()
+        .filter_map(|line| {
+            line.trim()
+                .strip_prefix("[offset:")?
+                .strip_suffix(']')?
+                .trim()
+                .parse::<i64>()
+                .ok()
+        })
+        .next_back()
+        .unwrap_or(0) as f64
+        / 1000.0;
     let mut timed = Vec::new();
     let mut plain = Vec::new();
-    for raw in text.trim_start_matches('\u{feff}').lines() {
+    for raw in text.lines() {
         let mut rest = raw.trim();
         let mut stamps = Vec::new();
         while let Some(after_open) = rest.strip_prefix('[') {
@@ -369,8 +451,8 @@ pub(crate) fn parse_lyrics(text: &str) -> Vec<Lyric> {
         if !stamps.is_empty() {
             for time in stamps {
                 timed.push(Lyric {
-                    time: Some(time),
-                    text: rest.trim().to_string(),
+                    time: Some((time - offset).max(0.0)),
+                    text: crate::lyric_timing::offset_markup(rest.trim(), offset),
                 });
             }
         } else if !rest.is_empty() && !(rest.starts_with('[') && rest.ends_with(']')) {
@@ -391,6 +473,39 @@ pub(crate) fn parse_lyrics(text: &str) -> Vec<Lyric> {
 #[cfg(test)]
 mod tests {
     use super::{metadata_cache_path, parse_filename, parse_lyrics, read_track};
+
+    #[test]
+    fn artist_tag_takes_precedence_over_album_artist() {
+        let keys = ["artist", "album_artist", "performer"];
+        let tags = serde_json::json!({
+            "album_artist": "Various Artists",
+            "artist": "Track Artist",
+            "performer": "Performer"
+        });
+        assert_eq!(super::tag(&tags, &keys).as_deref(), Some("Track Artist"));
+
+        let tags = serde_json::json!({
+            "artist": "  ",
+            "Album_Artist": " Various Artists ",
+            "performer": "Performer"
+        });
+        assert_eq!(super::tag(&tags, &keys).as_deref(), Some("Various Artists"));
+    }
+
+    #[test]
+    fn media_tool_times_out_and_captures_stdout() {
+        use std::process::Command;
+        use std::time::Duration;
+
+        let output =
+            super::run_media_tool(Command::new("printf").arg("tags"), Duration::from_secs(2))
+                .unwrap();
+        assert_eq!(output.as_deref(), Some(&b"tags"[..]));
+        let error =
+            super::run_media_tool(Command::new("sleep").arg("5"), Duration::from_millis(30))
+                .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+    }
 
     #[test]
     fn directory_import_handles_symlink_cycles() {
@@ -426,6 +541,41 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0].text, "First line");
         assert_eq!(lines[1].time, None);
+    }
+
+    #[test]
+    fn lrc_offset_moves_lines_and_word_cues_together() {
+        use crate::lyric_timing::{markup, quality};
+        // Global metadata also applies when it appears after the lyrics.
+        let lines = parse_lyrics("\u{feff}[00:02]<00:02>Тихо <00:03>мир<00:04>\n[offset:+1000]");
+        assert_eq!(lines[0].time, Some(1.0));
+        assert_eq!(
+            markup(&lines[0].text),
+            ("Тихо мир".into(), vec![(0, 1.0), (9, 2.0), (15, 3.0)])
+        );
+        assert_eq!(quality(&lines), 3);
+        let delayed = parse_lyrics("[offset:-500]\n[00:02]<00:02>One <00:03>two");
+        assert_eq!(delayed[0].time, Some(2.5));
+        assert_eq!(markup(&delayed[0].text).1, vec![(0, 2.5), (4, 3.5)]);
+        let clamped = parse_lyrics("[offset:2000]\n[00:01]<00:01>One <00:03>two");
+        assert_eq!(clamped[0].time, Some(0.0));
+        assert_eq!(markup(&clamped[0].text).1, vec![(0, 0.0), (4, 1.0)]);
+    }
+
+    #[test]
+    fn lrc_offset_handles_repeated_lines_and_ignores_invalid_values() {
+        let lines = parse_lyrics("[offset:500]\n[00:01][00:03]Again\n[offset:NaN]");
+        assert_eq!(
+            lines.iter().map(|line| line.time).collect::<Vec<_>>(),
+            vec![Some(0.5), Some(2.5)]
+        );
+        let unchanged = parse_lyrics("[offset:inf]\n[00:01]<00:01.125>Word");
+        assert_eq!(unchanged[0].time, Some(1.0));
+        assert_eq!(unchanged[0].text, "<00:01.125>Word");
+        assert_eq!(
+            parse_lyrics("[offset:1000]\nPlain text")[0].text,
+            "Plain text"
+        );
     }
 
     #[test]
@@ -478,10 +628,21 @@ mod tests {
             .status()
             .unwrap();
         assert!(status.success());
+        // A sidecar containing only LRC tags has no lyrics and must not hide TXT.
+        std::fs::write(path.with_extension("lrc"), "[ar:Artist]\n[ti:Song]\n").unwrap();
+        std::fs::write(path.with_extension("txt"), "Local lyrics\nSecond line").unwrap();
         let cache = metadata_cache_path(&path);
-        let track = read_track(path);
+        let track = read_track(path.clone());
         assert_eq!(track.title, "Splinter Cell");
         assert_eq!(track.artist, "YUNG TRAPPA");
+        assert_eq!(track.lyrics.len(), 2);
+        assert_eq!(track.lyrics[0].text, "Local lyrics");
+        if let Some(cache) = cache {
+            let _ = std::fs::remove_file(cache);
+        }
+        std::fs::write(path.with_extension("lrc"), "[00:00]<00:00>\n").unwrap();
+        let cache = metadata_cache_path(&path);
+        assert_eq!(read_track(path).lyrics[0].text, "Local lyrics");
         if let Some(cache) = cache {
             let _ = std::fs::remove_file(cache);
         }
@@ -500,5 +661,72 @@ mod tests {
         let after = metadata_cache_path(&audio).unwrap();
         assert_ne!(before, after);
         let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn extreme_offsets_and_duplicate_timestamps_stay_finite_and_sorted() {
+        for offset in [i64::MIN, i64::MAX, -1, 0, 1] {
+            let raw =
+                format!("\u{feff}[offset:{offset}]\r\n[00:02][00:02]<00:02>Я 👩‍🚀\r\n[00:01]Earlier");
+            let lines = parse_lyrics(&raw);
+            assert_eq!(lines.len(), 3);
+            assert!(lines.iter().all(|line| line
+                .time
+                .is_some_and(|time| time.is_finite() && time >= 0.0)));
+            assert!(lines.windows(2).all(|pair| pair[0].time <= pair[1].time));
+        }
+    }
+
+    #[test]
+    fn malformed_timestamp_prefixes_never_create_invalid_times() {
+        for raw in [
+            "[",
+            "[00:",
+            "[00:60]text",
+            "[18446744073709551616:00]text",
+            "[00:1e999]text",
+            "[00:00]\0Я",
+            "\u{feff}\u{feff}[00:01]text",
+        ] {
+            let lines = parse_lyrics(raw);
+            assert!(lines
+                .iter()
+                .filter_map(|line| line.time)
+                .all(|time| time.is_finite() && time >= 0.0));
+        }
+    }
+
+    #[test]
+    fn media_tool_rejects_excessive_stdout_and_failed_exit() {
+        use std::{process::Command, time::Duration};
+        let error = super::run_media_tool(
+            Command::new("head").args(["-c", "2100000", "/dev/zero"]),
+            Duration::from_secs(5),
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        let result = super::run_media_tool(
+            Command::new("sh").args(["-c", "printf partial; exit 3"]),
+            Duration::from_secs(5),
+        )
+        .unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn import_tolerates_broken_links_and_non_audio_files() {
+        let root = std::env::temp_dir().join(format!("veyra-import-links-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("nested")).unwrap();
+        std::fs::write(root.join("nested/А\n\"Б.OPUS"), b"fixture").unwrap();
+        std::fs::write(root.join("notes.txt"), b"not audio").unwrap();
+        std::os::unix::fs::symlink(root.join("missing"), root.join("broken.mp3")).unwrap();
+        std::os::unix::fs::symlink(&root, root.join("nested/loop")).unwrap();
+        let mut found = Vec::new();
+        super::collect_audio(&root, &mut found);
+        assert_eq!(
+            found,
+            vec![root.join("nested/А\n\"Б.OPUS").canonicalize().unwrap()]
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

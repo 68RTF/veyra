@@ -1,7 +1,10 @@
 use gtk::prelude::*;
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
-/// Keep one finite animation per widget and property. Start retargeting from the visible value.
+/// One finite animation per widget/property. Retarget from the visible value.
 pub(crate) struct Tween {
     value: Cell<f64>,
     target: Cell<f64>,
@@ -35,6 +38,27 @@ impl Tween {
         target: f64,
         millis: u32,
         apply: impl Fn(&W, f64) + 'static,
+    ) {
+        self.animate_with(widget, target, millis, apply, ease_out);
+    }
+
+    pub fn animate_smooth<W: IsA<gtk::Widget> + 'static>(
+        self: &Rc<Self>,
+        widget: &W,
+        target: f64,
+        millis: u32,
+        apply: impl Fn(&W, f64) + 'static,
+    ) {
+        self.animate_with(widget, target, millis, apply, smooth_step);
+    }
+
+    fn animate_with<W: IsA<gtk::Widget> + 'static>(
+        self: &Rc<Self>,
+        widget: &W,
+        target: f64,
+        millis: u32,
+        apply: impl Fn(&W, f64) + 'static,
+        easing: fn(f64) -> f64,
     ) {
         if !widget.is_mapped() || !super::animations_enabled() {
             let changed = self.value() != target;
@@ -73,12 +97,231 @@ impl Tween {
                 apply(widget, target);
                 return glib::ControlFlow::Break;
             }
-            let value = from + (target - from) * ease_out(progress);
+            let value = from + (target - from) * easing(progress);
             tween.value.set(value);
             apply(widget, value);
             glib::ControlFlow::Continue
         });
     }
+}
+
+/// Only the active lyric owns a frame callback. The audio clock is sampled on
+/// each frame; easing an old UI snapshot would introduce another moving delay.
+pub(crate) struct LyricHighlight {
+    label: RefCell<Option<gtk::Label>>,
+    interval: Cell<(f64, f64)>,
+    rendered: RefCell<Vec<(u32, u32, u16)>>,
+    scratch: RefCell<Vec<(u32, u32, u16)>>,
+    timeline: RefCell<Option<crate::lyric_timing::Timeline>>,
+    tick: RefCell<Option<gtk::TickCallbackId>>,
+    wait: RefCell<Option<glib::SourceId>>,
+    position: Box<dyn Fn() -> Option<(f64, bool, f64)>>,
+    on_boundary: Box<dyn Fn()>,
+}
+
+impl LyricHighlight {
+    pub fn new(
+        position: impl Fn() -> Option<(f64, bool, f64)> + 'static,
+        on_boundary: impl Fn() + 'static,
+    ) -> Rc<Self> {
+        Rc::new(Self {
+            label: RefCell::new(None),
+            interval: Cell::new((0.0, 0.0)),
+            rendered: RefCell::new(Vec::new()),
+            scratch: RefCell::new(Vec::new()),
+            timeline: RefCell::new(None),
+            tick: RefCell::new(None),
+            wait: RefCell::new(None),
+            position: Box::new(position),
+            on_boundary: Box::new(on_boundary),
+        })
+    }
+
+    pub fn clear(&self) {
+        self.stop();
+        if let Some(label) = self.label.borrow_mut().take() {
+            label.set_attributes(None);
+        }
+        self.rendered.borrow_mut().clear();
+        self.timeline.borrow_mut().take();
+    }
+
+    pub fn is_exact(&self) -> bool {
+        self.timeline
+            .borrow()
+            .as_ref()
+            .is_some_and(|timeline| timeline.exact)
+    }
+
+    fn stop(&self) {
+        if let Some(wait) = self.wait.borrow_mut().take() {
+            wait.remove();
+        }
+        if let Some(tick) = self.tick.borrow_mut().take() {
+            tick.remove();
+        }
+    }
+
+    #[cfg(test)]
+    pub fn update(self: &Rc<Self>, label: &gtk::Label, start: f64, end: f64) {
+        self.update_timed(label, &label.text(), start, end, 6.5);
+    }
+
+    pub fn update_timed(
+        self: &Rc<Self>,
+        label: &gtk::Label,
+        raw: &str,
+        start: f64,
+        end: f64,
+        rate: f64,
+    ) {
+        if self.label.borrow().as_ref() != Some(label) {
+            self.clear();
+            self.label.replace(Some(label.clone()));
+        }
+        if self.interval.get() != (start, end)
+            || self
+                .timeline
+                .borrow()
+                .as_ref()
+                .is_none_or(|timeline| timeline.raw != raw)
+        {
+            self.timeline
+                .replace(Some(crate::lyric_timing::Timeline::new(
+                    raw, start, end, rate,
+                )));
+        }
+        self.interval.set((start, end));
+        self.refresh(false);
+    }
+
+    fn refresh(self: &Rc<Self>, notify_end: bool) {
+        if !self.paint() {
+            self.stop();
+            self.settle(notify_end);
+        } else {
+            if let Some(wait) = self.wait.borrow_mut().take() {
+                wait.remove();
+            }
+            if self.tick.borrow().is_some() {
+                return;
+            }
+            let weak = Rc::downgrade(self);
+            let Some(label) = self.label.borrow().clone() else {
+                return;
+            };
+            let tick = label.add_tick_callback(move |_, _| {
+                let Some(highlight) = weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+                if highlight.paint() {
+                    glib::ControlFlow::Continue
+                } else {
+                    highlight.tick.borrow_mut().take();
+                    highlight.settle(true);
+                    glib::ControlFlow::Break
+                }
+            });
+            self.tick.replace(Some(tick));
+        }
+    }
+
+    fn settle(self: &Rc<Self>, notify_end: bool) {
+        if !super::animations_enabled()
+            || !self
+                .label
+                .borrow()
+                .as_ref()
+                .is_some_and(|label| label.is_mapped())
+        {
+            return;
+        }
+        let Some((position, playing, speed)) = (self.position)() else {
+            return;
+        };
+        if !playing {
+            return;
+        }
+        let end = self.interval.get().1;
+        if position >= end {
+            if notify_end {
+                (self.on_boundary)();
+            }
+            return;
+        }
+        let next = self
+            .timeline
+            .borrow()
+            .as_ref()
+            .and_then(|timeline| timeline.next_change(position, speed))
+            .unwrap_or(end)
+            .min(end);
+        if !next.is_finite() || !speed.is_finite() || speed <= 0.0 {
+            return;
+        }
+        let delay =
+            std::time::Duration::from_secs_f64(((next - position) / speed).clamp(0.001, 86400.0));
+        let weak = Rc::downgrade(self);
+        let wait = glib::timeout_add_local_once(delay, move || {
+            if let Some(highlight) = weak.upgrade() {
+                highlight.wait.borrow_mut().take();
+                highlight.refresh(true);
+            }
+        });
+        self.wait.replace(Some(wait));
+    }
+
+    fn paint(&self) -> bool {
+        let Some((position, playing, speed)) = (self.position)() else {
+            return false;
+        };
+        let label = self.label.borrow();
+        let Some(label) = label.as_ref().filter(|label| label.is_mapped()) else {
+            return false;
+        };
+        if !super::animations_enabled() {
+            label.set_attributes(None);
+            self.rendered.borrow_mut().clear();
+            return false;
+        }
+        let (start, end) = self.interval.get();
+        let timeline = self.timeline.borrow();
+        let Some(timeline) = timeline.as_ref() else {
+            return false;
+        };
+        let mut alphas = self.scratch.borrow_mut();
+        timeline.fill_alphas_at_speed(position, speed, &mut alphas);
+        let mut rendered = self.rendered.borrow_mut();
+        if *rendered != *alphas {
+            let attrs = gtk::pango::AttrList::new();
+            for &(start, end, alpha) in alphas.iter() {
+                let mut attr = gtk::pango::AttrInt::new_foreground_alpha(alpha);
+                attr.set_start_index(start);
+                attr.set_end_index(end);
+                attrs.insert(attr);
+            }
+            label.set_attributes(Some(&attrs));
+            std::mem::swap(&mut *rendered, &mut *alphas);
+        }
+        playing
+            && end.is_finite()
+            && end > start
+            && position < end
+            && timeline.next_change(position, speed) == Some(position)
+    }
+}
+
+#[cfg(test)]
+fn lyric_alphas(text: &str, start: f64, end: f64, position: f64) -> Vec<(u32, u32, u16)> {
+    let timeline = crate::lyric_timing::Timeline::new(text, start, end, 6.5);
+    let mut ranges = Vec::new();
+    timeline.fill_alphas(position, &mut ranges);
+    ranges
+}
+
+// Zero velocity and acceleration at both ends keeps lyric scrolling gentle.
+fn smooth_step(progress: f64) -> f64 {
+    progress.powi(3) * (10.0 + progress * (-15.0 + 6.0 * progress))
 }
 
 fn ease_out(progress: f64) -> f64 {
@@ -139,17 +382,58 @@ pub(crate) fn animate_button(button: &impl IsA<gtk::Button>) {
         if let Some(child) = button.child().filter(|child| child.is_visible()) {
             button.propagate_draw(&child, cr);
         }
-        let _ = cr.restore();
         if button.has_visible_focus() {
             gtk::render_focus(&style, cr, 0.0, 0.0, width, height);
         }
+        let _ = cr.restore();
         glib::Propagation::Stop
     });
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ease_out;
+    use super::{ease_out, lyric_alphas};
+
+    fn alpha_at(text: &str, position: f64, byte: usize) -> u16 {
+        lyric_alphas(text, 4.0, 8.0, position)
+            .into_iter()
+            .find(|&(start, end, _)| start as usize <= byte && byte < end as usize)
+            .map_or(u16::MAX, |(_, _, alpha)| alpha)
+    }
+
+    #[test]
+    fn lyric_fades_are_continuous_and_complete_at_letter_onsets() {
+        let text = "Тихо";
+        let before = alpha_at(text, 4.85, 2);
+        let beginning = alpha_at(text, 4.90, 2);
+        let middle = alpha_at(text, 4.94, 2);
+        let almost = alpha_at(text, 4.98, 2);
+        let onset = alpha_at(text, 5.0, 2);
+        assert!(before < beginning && beginning < middle && middle < almost && almost < onset);
+        assert_eq!(onset, u16::MAX);
+        assert_eq!(alpha_at(text, 4.0, 0), u16::MAX);
+        assert!(
+            lyric_alphas(text, 4.0, 8.0, 7.0).is_empty(),
+            "last letter finishes before the line ends"
+        );
+        assert_eq!(
+            alpha_at(text, 4.90, 2),
+            beginning,
+            "seek back is independent of previous frames"
+        );
+    }
+
+    #[test]
+    fn lyric_attributes_preserve_utf8_and_handle_missing_intervals() {
+        let text = "Тихо 🌙";
+        for (start, end, _) in lyric_alphas(text, 0.0, 6.0, 3.95) {
+            assert!(text.is_char_boundary(start as usize));
+            assert!(text.is_char_boundary(end as usize));
+        }
+        assert!(lyric_alphas("", 0.0, 4.0, 2.0).is_empty());
+        assert!(lyric_alphas(text, 4.0, 4.0, 4.0).is_empty());
+        assert!(lyric_alphas(text, 4.0, f64::NAN, 4.0).is_empty());
+    }
 
     #[test]
     fn easing_is_monotonic_and_slows_down_at_common_refresh_rates() {

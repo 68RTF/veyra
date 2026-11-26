@@ -30,10 +30,10 @@ impl ShuffleOrder {
         Some(&self.history[previous])
     }
 
-    pub(crate) fn can_advance<'a>(&self, tracks: impl Iterator<Item = &'a Path>) -> bool {
+    pub(crate) fn can_advance(&self, track_count: usize) -> bool {
         self.cursor
             .is_some_and(|cursor| cursor + 1 < self.history.len())
-            || tracks.into_iter().any(|path| !self.played.contains(path))
+            || self.played.len() < track_count
     }
 
     pub(crate) fn next<'a>(
@@ -123,6 +123,61 @@ mod tests {
         assert_eq!(
             order.next([b, c].into_iter(), b, false),
             Some(c.to_path_buf())
+        );
+    }
+
+    #[test]
+    fn repeated_cycles_never_repeat_inside_a_cycle() {
+        for count in 1..=32 {
+            let tracks: Vec<_> = (0..count)
+                .map(|i| PathBuf::from(format!("Трек \"{i}\"\n.mp3")))
+                .collect();
+            let mut current = tracks[0].clone();
+            let mut order = ShuffleOrder::default();
+            order.record(&current);
+            for cycle in 0..16 {
+                let mut seen = HashSet::from([current.clone()]);
+                for _ in 1..count {
+                    let next = order
+                        .next(tracks.iter().map(PathBuf::as_path), &current, false)
+                        .unwrap();
+                    assert!(seen.insert(next.clone()), "count={count} cycle={cycle}");
+                    order.record(&next);
+                    current = next;
+                }
+                assert!(order
+                    .next(tracks.iter().map(PathBuf::as_path), &current, false)
+                    .is_none());
+                let next = order
+                    .next(tracks.iter().map(PathBuf::as_path), &current, true)
+                    .unwrap();
+                if count > 1 {
+                    assert_ne!(next, current);
+                }
+                order.record(&next);
+                current = next;
+            }
+        }
+    }
+
+    #[test]
+    fn removing_all_history_allows_a_new_queue() {
+        let mut order = ShuffleOrder::default();
+        for track in ["a", "b", "c"] {
+            order.record(Path::new(track));
+        }
+        order.previous();
+        for track in ["c", "a", "b"] {
+            order.remove(Path::new(track));
+        }
+        assert!(!order.has_previous());
+        assert!(order.previous().is_none());
+        assert!(order
+            .next(std::iter::empty(), Path::new("gone"), true)
+            .is_none());
+        assert_eq!(
+            order.next([Path::new("new")].into_iter(), Path::new("gone"), false),
+            Some(PathBuf::from("new"))
         );
     }
 }

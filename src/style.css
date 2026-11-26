@@ -7,12 +7,15 @@ window {
     transition: background-color 180ms ease-out, color 180ms ease-out;
 }
 
+/* Focus is shown by the component background, including in keyboard navigation. */
+* { outline-style: none; }
+
 label { color: inherit; }
 selection { background-color: @md_secondary_container; color: @md_on_secondary_container; }
 button {
     background-image: none;
     background-color: transparent;
-    border: 1px solid @md_outline;
+    border: 1px solid transparent;
     border-radius: 999px;
     box-shadow: none;
     text-shadow: none;
@@ -25,14 +28,11 @@ button {
 button:hover { background-color: alpha(@md_primary, 0.08); }
 button:active { background-color: alpha(@md_primary, 0.12); }
 button:disabled {
-    border-color: alpha(@md_on_surface, 0.12);
-    color: alpha(@md_on_surface, 0.38);
+    color: alpha(@md_on_surface, 0.48);
     background-color: transparent;
 }
-button:focus, entry:focus, scale:focus, switch:focus,
-checkbutton:focus, row:focus, menuitem:focus {
-    outline: 2px solid @md_primary;
-    outline-offset: -2px;
+window:not(.pointer-focus) button:focus:not(:active):not(:disabled) {
+    background-color: alpha(@md_on_surface, 0.18);
 }
 button.default, .tonal-button, .queue-toolbar > button.queue-add:not(.queue-menu), .play-fab {
     background-color: @md_primary;
@@ -47,107 +47,139 @@ button.default:active, .tonal-button:active,
 .queue-toolbar > button.queue-add:not(.queue-menu):active, .play-fab:active {
     background-color: mix(@md_primary, @md_on_primary, 0.12);
 }
-button.default:focus, .tonal-button:focus,
-.queue-toolbar > button.queue-add:not(.queue-menu):focus, .play-fab:focus {
-    outline-color: @md_on_primary;
-    outline-offset: -4px;
+window:not(.pointer-focus) button.default:focus:not(:active):not(:disabled),
+window:not(.pointer-focus) .tonal-button:focus:not(:active):not(:disabled),
+window:not(.pointer-focus) .queue-toolbar > button.queue-add:not(.queue-menu):focus:not(:active):not(:disabled),
+window:not(.pointer-focus) .play-fab:focus:not(:active):not(:disabled) {
+    background-color: mix(@md_primary, @md_on_primary, 0.22);
 }
 button.default:disabled, .tonal-button:disabled,
 .queue-toolbar > button.queue-add:not(.queue-menu):disabled, .play-fab:disabled {
     background-color: alpha(@md_on_surface, 0.12);
-    color: alpha(@md_on_surface, 0.38);
+    color: alpha(@md_on_surface, 0.48);
 }
 .ghost-button, .dialog-action-area button { border-color: transparent; }
 
 .sidebar {
-    background-color: @md_surface_low;
+    background-color: mix(@md_surface, @md_surface_low, 0.48);
     border: none;
-    border-radius: 24px;
-    padding: 12px 8px;
+    border-radius: 16px;
+    padding: 8px 4px;
     transition: background-color 180ms ease-out;
 }
-.brand-mark { background-color: @md_primary_container; border-radius: 12px; }
+.brand-mark { background-color: @md_primary_container; border-radius: 12px; box-shadow: inset 0 0 0 1px alpha(@md_primary, 0.18); }
 .brand-icon { color: @md_on_primary_container; }
 .nav-item, .sidebar-action {
     padding: 0;
     min-width: 48px;
     min-height: 56px;
     border: none;
+    border-radius: 16px;
     color: @md_on_surface_variant;
 }
-.nav-item { font-size: 12px; }
-.sidebar button:hover, .sidebar button:active { background-color: transparent; }
-.rail-indicator {
-    border-radius: 999px;
-    transition: background-color 180ms ease-out, color 180ms ease-out;
-}
-.nav-item:hover .rail-indicator, .sidebar-action:hover .rail-indicator,
-.icon-button:hover, .transport-button:hover, .queue-menu:hover {
+.nav-item { font-size: 13px; }
+.sidebar-action { font-size: 13px; }
+.sidebar.expanded button { padding: 0 12px; }
+.sidebar button:hover, .icon-button:hover, .transport-button:hover, .queue-menu:hover {
     background-color: alpha(@md_on_surface, 0.08);
 }
-.nav-item:active .rail-indicator, .sidebar-action:active .rail-indicator,
-.icon-button:active, .transport-button:active, .queue-menu:active {
+.sidebar button:active, .icon-button:active, .transport-button:active, .queue-menu:active {
     background-color: alpha(@md_on_surface, 0.12);
 }
-.sidebar-action.selected .rail-indicator, .nav-item.selected .rail-indicator, .transport-button:checked, .transport-button.active,
+.sidebar button.selected, .transport-button:checked, .transport-button.active,
 .lyrics-action, .speed-preset:checked {
     background-color: @md_secondary_container;
     color: @md_on_secondary_container;
     border-color: transparent;
 }
-.sidebar-action.selected:hover .rail-indicator, .nav-item.selected:hover .rail-indicator, .transport-button:checked:hover, .transport-button.active:hover,
+.sidebar button.selected:hover, .transport-button:checked:hover, .transport-button.active:hover,
 .lyrics-action:hover, .speed-preset:checked:hover {
     background-color: mix(@md_secondary_container, @md_on_secondary_container, 0.08);
 }
-.sidebar-action.selected:active .rail-indicator, .nav-item.selected:active .rail-indicator, .transport-button:checked:active, .transport-button.active:active,
+.sidebar button.selected:active, .transport-button:checked:active, .transport-button.active:active,
 .lyrics-action:active, .speed-preset:checked:active {
     background-color: mix(@md_secondary_container, @md_on_secondary_container, 0.12);
 }
-.nav-item.selected label { color: @md_on_surface; font-weight: 700; }
+window:not(.pointer-focus) .sidebar button.selected:focus:not(:active):not(:disabled),
+window:not(.pointer-focus) .transport-button:checked:focus:not(:active):not(:disabled),
+window:not(.pointer-focus) .transport-button.active:focus:not(:active):not(:disabled),
+window:not(.pointer-focus) .lyrics-action:focus:not(:active):not(:disabled),
+window:not(.pointer-focus) .lyrics-resume:focus:not(:active):not(:disabled),
+window:not(.pointer-focus) .speed-preset:checked:focus:not(:active):not(:disabled) {
+    background-color: mix(@md_secondary_container, @md_on_secondary_container, 0.22);
+}
+.sidebar button.selected {
+    background-color: alpha(@md_primary, 0.1);
+    color: @md_primary;
+    box-shadow: inset 3px 0 @md_primary;
+    border-radius: 12px;
+}
+.sidebar button.selected:hover { background-color: alpha(@md_primary, 0.15); }
+.sidebar button.selected label { font-weight: 700; }
+.sidebar .sidebar-action { color: @md_on_surface_variant; }
+.sidebar .divider { background-color: alpha(@md_outline_variant, 0.4); }
 .divider, separator { background-color: @md_outline_variant; }
 
 .heading { font-size: 28px; font-weight: 400; }
 .secondary { color: @md_on_surface_variant; }
+.status-banner {
+    color: @md_on_secondary_container;
+    background-color: @md_secondary_container;
+    border-radius: 12px;
+    padding: 8px 12px;
+}
 .player-stage {
-    background-color: @md_surface_low;
-    border-radius: 28px;
+    background-color: @md_stage;
+    border-radius: 20px;
     transition: background-color 180ms ease-out;
 }
 .cover-frame {
     background-color: @md_primary_container;
-    border-radius: 24px;
+    border-radius: 16px;
     transition: background-color 180ms ease-out;
-    box-shadow: 0 4px 12px alpha(black, 0.18);
+    box-shadow: 0 2px 8px alpha(black, 0.18);
 }
-.cover-placeholder { background-color: @md_primary_container; border-radius: 24px; }
+.cover-placeholder { background-color: @md_primary_container; border-radius: 16px; }
 .cover-glyph { color: @md_on_primary_container; }
 .mini-cover-frame, .mini-cover-frame .cover-placeholder,
 .queue-cover, .queue-cover .cover-placeholder { border-radius: 8px; }
-.track-title { font-size: 36px; font-weight: 400; }
-.track-artist { font-size: 20px; color: @md_on_surface_variant; }
-.track-album { color: @md_on_surface_variant; }
-.icon-button, .transport-button, .queue-menu {
+.track-title { font-size: 38px; font-weight: 600; }
+.compact-hero .track-title { font-size: 28px; }
+.stacked-hero .track-title { font-size: 34px; font-weight: 600; }
+.stacked-hero .track-details { padding-bottom: 8px; }
+.track-artist { font-size: 18px; color: @md_on_surface_variant; }
+.track-album { color: @md_on_surface_variant; font-size: 13px; }
+.lyrics-action { padding: 6px 12px; font-size: 13px; }
+.lyrics-action:disabled { color: alpha(@md_on_surface, 0.48); background-color: transparent; }
+.track-actions .icon-button { min-width: 36px; min-height: 36px; padding: 0; }
+.icon-button, .queue-menu {
     min-width: 46px;
     min-height: 46px;
     padding: 0;
     border-color: transparent;
     color: @md_on_surface_variant;
 }
+.transport-button {
+    min-width: 48px;
+    min-height: 48px;
+    padding: 0;
+    border: none;
+    border-radius: 24px;
+    color: @md_on_surface_variant;
+}
+.transport-button.mode { min-width: 40px; min-height: 40px; }
 .icon-button.lyrics-back {
     min-width: 44px;
     min-height: 44px;
     border: none;
     border-radius: 22px;
 }
-/* GTK 3 draws the focus outline separately from the button border. */
-.lyrics-back:focus { -gtk-outline-radius: 22px; }
-.lyrics-action:focus { -gtk-outline-radius: 999px; }
 .play-fab {
-    min-width: 62px;
-    min-height: 54px;
+    min-width: 56px;
+    min-height: 48px;
     padding: 0;
-    border-radius: 28px;
-    transition: border-radius 180ms ease-out, background-color 180ms ease-out, color 180ms ease-out;
+    border: none;
+    border-radius: 20px;
 }
 .transport-indicator {
     border-radius: 999px;
@@ -159,23 +191,12 @@ button.default:disabled, .tonal-button:disabled,
 .transport-button:disabled .transport-indicator { background-color: transparent; }
 .transport-button:disabled:checked, .transport-button.active:disabled {
     background-color: alpha(@md_on_surface, 0.12);
-    color: alpha(@md_on_surface, 0.38);
+    color: alpha(@md_on_surface, 0.48);
 }
-.play-fab.playing { border-radius: 16px; }
 .icon-button:disabled, .transport-button:disabled, .queue-menu:disabled {
-    color: alpha(@md_on_surface, 0.38);
+    color: alpha(@md_on_surface, 0.48);
 }
 
-.lyrics-backdrop {
-    background-color: @md_surface_low;
-    border-radius: 28px;
-    transition: background-color 180ms ease-out;
-}
-.lyrics-scrim {
-    background-image: linear-gradient(to bottom, alpha(@md_surface_low, 0.94),
-        alpha(@md_surface_low, 0.88) 55%, alpha(@md_surface_low, 0.92));
-    border-radius: 28px;
-}
 .lyrics-title { font-size: 18px; font-weight: 500; }
 .lyrics-artist, .lyrics-hint { color: @md_on_surface_variant; font-size: 12px; }
 .lyrics-list, .lyrics-list row, .lyrics-scroll, .lyrics-scroll viewport {
@@ -184,22 +205,23 @@ button.default:disabled, .tonal-button:disabled,
     border: none;
     box-shadow: none;
 }
-.lyrics-list .lyric-row {
-    border-radius: 12px;
-    transition: background-color 180ms ease-out;
-}
-.lyrics-list .lyric-row:hover { background-color: alpha(@md_on_surface, 0.08); }
-.lyrics-list .lyric-row.active { background-color: alpha(@md_primary, 0.12); }
-.lyrics-list .lyric-row.active:hover { background-color: alpha(@md_primary, 0.18); }
+.lyrics-list .lyric-row { padding: 0; }
+.lyrics-list .lyric-row:hover .lyric-text { background-color: alpha(@md_on_surface, 0.08); }
+.lyrics-list .lyric-row:focus .lyric-text { background-color: alpha(@md_on_surface, 0.14); }
 .lyric-text {
-    font-size: 28px;
-    font-weight: 600;
+    font-size: 36px;
+    font-weight: 500;
+    padding: 6px 16px;
+    border-radius: 8px;
     color: @md_on_surface_variant;
-    transition: color 180ms ease-out;
+    transition: color 180ms ease-out, background-color 180ms ease-out;
 }
 .lyric-row.past .lyric-text { color: mix(@md_on_surface_variant, @md_surface_low, 0.18); }
-.lyric-row.active .lyric-text { color: @md_on_surface; transition-duration: 180ms; }
-.lyric-plain { font-size: 18px; font-weight: 400; }
+.lyric-row.active .lyric-text {
+    color: @md_on_surface;
+}
+.lyrics-overlay.compact-lyrics .lyric-text { font-size: 28px; }
+.lyrics-overlay .lyric-plain { font-size: 18px; font-weight: 400; }
 .lyrics-resume {
     font-size: 12px;
     color: @md_on_secondary_container;
@@ -214,47 +236,52 @@ button.default:disabled, .tonal-button:disabled,
 entry {
     background-image: none;
     background-color: @md_surface;
-    border: 1px solid @md_outline;
+    border: 1px solid transparent;
     border-radius: 4px;
     padding: 11px 15px;
     color: @md_on_surface;
     caret-color: @md_primary;
     box-shadow: none;
 }
-entry:focus { border-color: @md_primary; outline-offset: -1px; }
+entry:focus { background-color: @md_surface_high; }
 entry placeholder, entry image { color: @md_on_surface_variant; }
 entry.search {
-    background-color: @md_surface_high;
+    background-color: @md_surface_container;
     border-color: transparent;
-    border-radius: 999px;
+    border-radius: 12px;
+    min-height: 22px;
+    padding: 8px 12px;
 }
+entry.search:hover { background-color: @md_surface_high; }
+entry.search:focus { background-color: @md_surface_high; border-color: @md_primary; }
+entry.search image.left { margin-right: 8px; }
+entry.search image.right:hover { color: @md_primary; }
 
 .player-bar {
-    background-color: @md_surface_container;
-    border: 1px solid alpha(@md_outline, 0.22);
-    border-radius: 24px;
-    padding: 8px 16px 8px;
-    box-shadow: 0 2px 6px alpha(black, 0.12);
+    background-color: mix(@md_surface_low, @md_surface_container, 0.55);
+    border: 1px solid alpha(@md_outline_variant, 0.35);
+    border-radius: 16px;
+    padding: 8px 12px 4px;
     transition: background-color 200ms ease-out;
 }
 .transport {
-    background-color: @md_surface_high;
-    border-radius: 32px;
-    padding: 4px;
-    transition: background-color 200ms ease-out;
+    padding: 0;
 }
 .now-playing { padding: 0 4px; }
-.volume-group {
-    background-color: @md_surface_high;
-    border-radius: 999px;
-    padding: 4px 12px;
-}
+.volume-group { padding: 0; }
 .timeline { padding: 0 4px; }
-.timeline scale trough, .timeline scale highlight { min-height: 6px; }
-.timecode, .queue-index, .queue-duration, .speed-value { font-feature-settings: "tnum"; }
+.timeline scale trough, .timeline scale highlight { min-height: 3px; }
+.timeline scale slider { background-color: transparent; min-width: 12px; min-height: 12px; }
+.timeline scale:hover slider, .timeline scale:focus slider,
+.timeline scale slider:active { background-color: @md_primary; }
+.timeline scale:disabled trough { opacity: 0.55; }
+.timeline scale:disabled slider { background-color: transparent; }
+.volume-group .icon-button { min-width: 36px; min-height: 36px; padding: 0; }
+.volume-group.muted scale highlight { background-color: @md_outline; }
+.timecode, .queue-duration, .speed-value { font-feature-settings: "tnum"; }
 .timecode { color: @md_on_surface_variant; font-size: 12px; min-width: 40px; }
-.now-title { font-size: 16px; font-weight: 500; }
-.now-artist { font-size: 12px; color: @md_on_surface_variant; }
+.now-title { font-size: 14px; font-weight: 600; }
+.now-artist { font-size: 13px; color: @md_on_surface_variant; }
 .muted-icon { color: @md_on_surface_variant; }
 scale { color: @md_primary; }
 scale trough, scale highlight, scale slider {
@@ -267,73 +294,183 @@ scale trough, scale highlight, scale slider {
 scale trough { min-height: 4px; background-color: @md_secondary_container; }
 scale highlight, scale slider { background-color: @md_primary; }
 scale slider { min-width: 14px; min-height: 14px; }
-scale slider:hover { box-shadow: 0 0 0 4px alpha(@md_primary, 0.12); }
-scale slider:active { box-shadow: 0 0 0 6px alpha(@md_primary, 0.16); }
-scale:disabled highlight, scale:disabled slider { background-color: alpha(@md_on_surface, 0.38); }
+scale:focus trough { background-color: mix(@md_secondary_container, @md_on_secondary_container, 0.2); }
+scale:focus slider { background-color: mix(@md_primary, @md_on_surface, 0.32); }
+scale slider:hover { background-color: mix(@md_primary, @md_on_surface, 0.12); }
+scale slider:active { background-color: mix(@md_primary, @md_on_surface, 0.24); }
+scale:disabled highlight, scale:disabled slider { background-color: alpha(@md_on_surface, 0.48); }
 scale value { color: @md_on_surface_variant; }
 scrollbar, scrollbar trough { background: transparent; border: none; }
 scrollbar slider { min-width: 6px; min-height: 32px; background: @md_outline_variant; border: none; border-radius: 999px; }
 scrollbar slider:hover { background-color: @md_outline; }
 
-.queue-table {
+/* Queue keeps a single reading surface with shared columns and stable row geometry. */
+.queue-page {
     background-color: @md_surface_low;
     border-radius: 20px;
-    transition: background-color 180ms ease-out;
+    padding: 24px 20px 12px;
 }
-.queue-columns {
-    background-color: @md_surface_container;
-    border-radius: 20px 20px 0 0;
-    padding: 8px 20px;
+.queue-page .queue-header { padding: 0 4px 8px; }
+.queue-page .queue-heading { font-size: 40px; font-weight: 600; }
+.queue-page .queue-summary { color: @md_on_surface_variant; font-size: 13px; }
+.queue-page .queue-toolbar { padding: 4px 4px 12px; }
+.queue-page entry.search {
+    background-color: @md_surface;
+    border: 1px solid alpha(@md_outline_variant, 0.55);
+    border-radius: 12px;
+    padding: 10px 14px;
+    min-height: 20px;
+}
+.queue-page entry.search:hover { border-color: @md_outline; }
+.queue-page entry.search:focus {
+    background-color: @md_surface;
+    border-color: @md_primary;
+    box-shadow: inset 0 0 0 1px @md_primary;
+}
+.queue-page .queue-header .queue-add:not(.queue-menu) {
+    min-height: 24px;
+    min-width: 0;
+    padding: 10px 16px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background-color: @md_primary;
+    color: @md_on_primary;
+    font-size: 13px;
+    font-weight: 600;
+}
+.queue-page .queue-header .queue-add:not(.queue-menu):hover {
+    background-color: mix(@md_primary, @md_on_primary, 0.08);
+}
+.queue-page .queue-header .queue-add:not(.queue-menu):active {
+    background-color: mix(@md_primary, @md_on_primary, 0.16);
+}
+window:not(.pointer-focus) .queue-page .queue-header .queue-add:not(.queue-menu):focus {
+    background-color: mix(@md_primary, @md_on_primary, 0.2);
+    outline: 2px solid @md_primary;
+    outline-offset: 2px;
+}
+.queue-page .queue-header .queue-menu {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    border-radius: 12px;
+    background-color: transparent;
     color: @md_on_surface_variant;
-    font-size: 12px;
-    font-weight: 500;
-    transition: background-color 180ms ease-out, color 180ms ease-out;
 }
-.queue-list, .queue-card, .queue-card viewport { background-color: transparent; }
-.queue-list { padding: 4px 8px; }
-.queue-row {
+.queue-page .queue-header .queue-menu:hover { background-color: @md_surface_high; }
+.queue-page .queue-jump {
+    padding: 8px 12px;
+    border: 1px solid alpha(@md_outline_variant, 0.5);
+    border-radius: 12px;
     background-color: transparent;
     color: @md_on_surface;
-    border-radius: 12px;
-    transition: background-color 150ms ease-out;
-}
-.queue-row:hover { background-color: alpha(@md_on_surface, 0.08); }
-.queue-row:selected { background-color: @md_surface_high; }
-.queue-row:selected:hover { background-color: mix(@md_surface_high, @md_on_surface, 0.08); }
-.queue-row.playing { background-color: @md_secondary_container; color: @md_on_secondary_container; }
-.queue-row.playing:hover { background-color: mix(@md_secondary_container, @md_on_secondary_container, 0.08); }
-.queue-row.playing:selected { box-shadow: inset 0 0 0 1px @md_outline; }
-.queue-row:active, .queue-row:selected:active { background-color: mix(@md_surface_high, @md_on_surface, 0.12); }
-.queue-row.playing:active { background-color: mix(@md_secondary_container, @md_on_secondary_container, 0.12); }
-.queue-row:focus { -gtk-outline-radius: 12px; }
-.queue-row.playing .queue-index, .queue-row.playing .queue-artist,
-.queue-row.playing .queue-duration, .queue-row.playing .queue-menu,
-.queue-row.playing .queue-handle { color: @md_on_secondary_container; }
-.queue-index, .queue-duration, .queue-artist, .queue-summary {
-    color: @md_on_surface_variant;
     font-size: 12px;
 }
-.queue-index { min-width: 32px; }
-.queue-duration { min-width: 48px; }
-.queue-title { font-size: 16px; font-weight: 500; }
-.queue-handle { color: @md_on_surface_variant; padding: 8px 4px; }
-.queue-handle:hover, .queued-next .queue-artist { color: @md_primary; }
-.queue-row:drop(active) { box-shadow: inset 0 0 0 2px @md_primary; }
-.queue-add { min-width: 46px; min-height: 46px; padding: 0; }
-.queue-menu.queue-add { background-color: @md_surface_high; }
-.queue-menu.queue-add:hover, .queue-menu.queue-add:checked {
-    background-color: mix(@md_surface_high, @md_on_surface, 0.08);
+.queue-page .queue-jump:hover { background-color: @md_surface_high; }
+.queue-page .queue-jump:disabled { color: alpha(@md_on_surface, 0.48); }
+.queue-page .queue-columns {
+    padding: 8px 16px;
+    border-bottom: 1px solid alpha(@md_outline_variant, 0.45);
+    color: @md_on_surface_variant;
+    font-size: 11px;
+    font-weight: 500;
 }
+.queue-page .queue-card, .queue-page .queue-panel {
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+}
+.queue-page .queue-panel { padding: 24px; }
+.queue-page .queue-list, .queue-page .queue-card layout { background-color: transparent; }
+.queue-page .queue-list { padding: 0; border: none; }
+.queue-page .queue-row {
+    background-color: transparent;
+    color: @md_on_surface;
+    padding: 10px 12px;
+    margin: 0;
+    border: none;
+    border-left: 3px solid transparent;
+    border-radius: 8px;
+    box-shadow: inset 0 -1px alpha(@md_outline_variant, 0.16);
+    transition: background-color 120ms ease-out, border-color 120ms ease-out;
+}
+.queue-page .queue-row:hover { background-color: alpha(@md_on_surface, 0.045); }
+.queue-page .queue-row:selected { background-color: @md_surface_high; }
+.queue-page .queue-row:selected:hover { background-color: mix(@md_surface_high, @md_on_surface, 0.045); }
+.queue-page .queue-row.playing {
+    background-color: alpha(@md_primary, 0.075);
+    border-left-color: @md_primary;
+}
+.queue-page .queue-row.playing:hover, .queue-page .queue-row.playing:selected {
+    background-color: alpha(@md_primary, 0.13);
+}
+.queue-page .queue-row.playing .queue-title { color: @md_on_surface; font-weight: 600; }
+.queue-page .queue-row.playing .queue-state { color: @md_primary; }
+.queue-page .queue-row:active { background-color: alpha(@md_on_surface, 0.1); }
+window:not(.pointer-focus) .queue-page .queue-row:focus {
+    outline: 2px solid @md_primary;
+    outline-offset: -2px;
+}
+.queue-page .queue-row:drop(active) { box-shadow: inset 0 0 0 2px @md_primary; }
+.queue-page .queue-duration-heading { min-width: 40px; padding-right: 84px; }
+.queue-page .queue-title { font-size: 15px; font-weight: 500; }
+.queue-page .queue-artist { color: @md_on_surface_variant; font-size: 12px; }
+.queue-page .queue-album { color: @md_on_surface_variant; font-size: 13px; }
+.queue-page .queue-duration {
+    color: @md_on_surface_variant;
+    min-width: 40px;
+    font-size: 12px;
+    font-feature-settings: "tnum";
+}
+.queue-page .queue-state {
+    color: @md_primary;
+    font-size: 10px;
+    font-weight: 600;
+    background-color: alpha(@md_primary, 0.08);
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+.queue-page .queue-handle { color: @md_on_surface_variant; padding: 8px 4px; }
+.queue-page .queue-handle:hover { color: @md_primary; }
+.queue-page .queue-row .queue-menu { min-width: 32px; min-height: 32px; border-radius: 8px; }
+.queue-page .queue-row .queue-menu, .queue-page .queue-row .queue-handle,
+.queue-page .queue-row .queue-play { opacity: 0; }
+.queue-page .queue-row:hover .queue-menu, .queue-page .queue-row:hover .queue-handle,
+.queue-page .queue-row:focus .queue-menu, .queue-page .queue-row:focus .queue-handle,
+.queue-page .queue-row:hover .queue-play, .queue-page .queue-row:focus .queue-play,
+.queue-page .queue-row .queue-menu:focus, .queue-page .queue-row .queue-play:focus { opacity: 1; }
+.queue-page .queue-row .queue-play {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background-color: @md_surface_high;
+    color: @md_primary;
+}
+.queue-page .queue-empty-action {
+    background-color: @md_primary;
+    color: @md_on_primary;
+    border-radius: 12px;
+    padding: 10px 16px;
+}
+.queue-page .queue-empty-action:hover { background-color: mix(@md_primary, @md_on_primary, 0.1); }
+.queue-page .empty-glyph { color: @md_primary; padding-bottom: 12px; }
+.queue-page .empty-title { font-size: 26px; font-weight: 500; }
+.queue-page .secondary { color: @md_on_surface_variant; font-size: 13px; }
+
 menu {
     background-color: @md_surface_high;
     color: @md_on_surface;
-    border: 1px solid @md_outline_variant;
+    border: 1px solid transparent;
     border-radius: 8px;
     padding: 4px 0;
 }
 menuitem { padding: 8px 12px; }
 menuitem:hover { background-color: alpha(@md_on_surface, 0.08); color: @md_on_surface; }
-menuitem:disabled { color: alpha(@md_on_surface, 0.38); }
+menuitem:focus { background-color: alpha(@md_on_surface, 0.18); }
+menuitem:disabled { color: alpha(@md_on_surface, 0.48); }
 tooltip {
     background-color: @md_inverse_surface;
     color: @md_inverse_on_surface;
@@ -342,67 +479,36 @@ tooltip {
 }
 tooltip label { color: @md_inverse_on_surface; }
 
-.settings-dialog, messagedialog, filechooserdialog { background-color: @md_surface_high; }
-.settings-dialog .dialog-vbox, messagedialog .dialog-vbox { background-color: transparent; }
-.settings-card { background-color: @md_surface_low; border-radius: 16px; padding: 16px; }
-.settings-label { font-size: 16px; font-weight: 500; }
-.settings-note { font-size: 13px; color: @md_on_surface_variant; }
+messagedialog, filechooserdialog { background-color: @md_surface_high; }
+messagedialog .dialog-vbox { background-color: transparent; }
+.settings-page .settings-label { font-size: 16px; font-weight: 500; }
+.settings-page .settings-note { font-size: 13px; color: @md_on_surface_variant; }
 .settings-page, .settings-page viewport {
     background-color: @md_surface_low;
-    border-radius: 28px;
+    border-radius: 20px;
     transition: background-color 180ms ease-out;
 }
-.settings-section-title { color: @md_primary; font-size: 14px; font-weight: 600; padding-left: 4px; }
-.settings-section {
-    background-color: @md_surface_container;
+.settings-page .settings-section-title { color: @md_on_surface; font-size: 18px; font-weight: 600; }
+.settings-page .settings-section {
+    background-color: mix(@md_surface, @md_surface_low, 0.45);
+    border: 1px solid alpha(@md_outline_variant, 0.4);
     border-radius: 16px;
     transition: background-color 180ms ease-out;
 }
-.settings-section separator { margin: 0 16px; }
-.settings-row { padding: 12px 16px; }
-.settings-speed { padding: 12px 16px; }
-.settings-info { padding: 0 4px; color: @md_primary; }
-.settings-note.error { color: @md_error; }
-.speed-value {
-    background-color: @md_secondary_container;
-    color: @md_on_secondary_container;
-    border-radius: 999px;
-    padding: 4px 12px;
-    min-width: 48px;
-    font-size: 13px;
-    font-weight: 500;
-}
-.settings-speed-slider { padding: 8px 0; }
-.settings-speed-slider trough, .settings-speed-slider highlight { min-height: 6px; }
-.speed-segments {
-    border: 1px solid @md_outline_variant;
-    border-radius: 999px;
-}
-.speed-preset {
-    padding: 4px 8px;
-    min-height: 28px;
-    border: none;
-    border-right: 1px solid alpha(@md_on_surface, 0.12);
-    border-radius: 0;
-    color: @md_on_surface_variant;
-}
-.speed-preset:first-child { border-radius: 999px 0 0 999px; }
-.speed-preset:last-child { border-radius: 0 999px 999px 0; border-right: none; }
-.speed-segments .speed-preset:checked {
-    font-weight: 700;
-    border-right-color: alpha(@md_on_surface, 0.12);
-}
-.speed-segments .speed-preset:last-child { border-right: none; }
+.settings-page .settings-section separator { margin: 0 16px; }
+.settings-page .settings-row { padding: 18px 20px; }
+.settings-page .settings-info { padding: 0 4px; color: @md_primary; }
+.settings-page .settings-note.error { color: @md_error; }
 .settings-page switch {
     background: @md_surface_high;
-    border: 2px solid @md_outline;
+    border: 2px solid transparent;
     border-radius: 999px;
     min-width: 40px;
     min-height: 22px;
     transition: background-color 180ms ease-out, border-color 180ms ease-out;
 }
 .settings-page switch:hover { background-color: mix(@md_surface_high, @md_on_surface, 0.08); }
-.settings-page switch:checked { background: @md_primary; border-color: @md_primary; }
+.settings-page switch:checked { background: @md_primary; }
 .settings-page switch:checked:hover { background-color: mix(@md_primary, @md_on_primary, 0.08); }
 .settings-page switch slider {
     background: @md_outline;
@@ -415,17 +521,81 @@ tooltip label { color: @md_inverse_on_surface; }
     transition: background-color 180ms ease-out;
 }
 .settings-page switch:checked slider { background: @md_on_primary; }
+.settings-page switch:focus:not(:checked) { background-color: mix(@md_surface_high, @md_on_surface, 0.19); }
+.settings-page switch:checked:focus { background-color: mix(@md_primary, @md_on_primary, 0.19); }
 .settings-page switch image { color: transparent; }
 .settings-page switch:disabled { opacity: 0.38; }
-checkbutton check {
-    background: @md_surface;
-    border: 2px solid @md_on_surface_variant;
-    border-radius: 3px;
-    color: @md_on_primary;
+
+.upcoming-panel {
+    background-color: transparent;
+    border-top: 1px solid alpha(@md_outline_variant, 0.35);
+    padding: 12px 24px;
 }
-checkbutton check:checked { background: @md_primary; border-color: @md_primary; }
-.download-status.error { color: @md_error; }
-progressbar trough, progressbar progress { background-image: none; border: none; border-radius: 999px; min-height: 4px; }
-progressbar trough { background-color: @md_secondary_container; }
-progressbar progress { background-color: @md_primary; }
-progressbar text { color: @md_on_surface_variant; }
+.upcoming-scroll, .upcoming-scroll viewport { background-color: transparent; }
+.upcoming-scroll scrollbar slider { min-height: 4px; min-width: 32px; }
+.upcoming-heading { font-size: 16px; font-weight: 600; }
+.upcoming-row { background-color: alpha(@md_surface, 0.45); border: none; border-radius: 12px; padding: 12px; color: @md_on_surface; }
+.upcoming-row:hover { background-color: mix(@md_surface, @md_on_surface, 0.08); }
+.upcoming-row:active { background-color: mix(@md_surface, @md_on_surface, 0.12); }
+.upcoming-row.play-next { background-color: alpha(@md_primary, 0.08); }
+.upcoming-title { font-size: 14px; font-weight: 500; }
+.upcoming-artist, .upcoming-duration, .upcoming-empty { color: @md_on_surface_variant; font-size: 13px; }
+.queue-link { font-size: 12px; padding: 6px 10px; }
+
+/* Settings typography and controls share the queue's visual hierarchy. */
+.settings-page .settings-heading { font-size: 40px; font-weight: 600; }
+.settings-page .settings-section-icon {
+    padding: 8px;
+    color: @md_primary;
+    background-color: alpha(@md_primary, 0.08);
+    border-radius: 12px;
+}
+.settings-page .settings-section separator { background-color: alpha(@md_outline_variant, 0.35); }
+.settings-page .settings-control {
+    background-color: @md_secondary_container;
+    color: @md_on_secondary_container;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 12px;
+}
+.settings-page .settings-control:hover { background-color: mix(@md_secondary_container, @md_on_secondary_container, 0.08); }
+.settings-page .settings-footer { color: @md_on_surface_variant; padding: 0 4px; }
+.settings-page .settings-note.connected { color: @md_primary; }
+.player-bar .play-fab { border-radius: 14px; }
+.player-bar .play-fab:hover { box-shadow: 0 2px 8px alpha(@md_primary, 0.16); }
+.player-bar .transport-button { border-radius: 12px; }
+.player-bar .transport-button.mode { border-radius: 12px; }
+.player-bar .mini-cover-frame { border-radius: 10px; }
+.player-bar .timeline scale trough { background-color: alpha(@md_outline, 0.5); }
+
+/* Playback speed: a compact chip and a single-column choice menu. */
+.player-bar .speed-button {
+    min-width: 60px; min-height: 36px; padding: 0 10px;
+    border: 1px solid alpha(@md_outline_variant, 0.65); border-radius: 18px;
+    background-color: alpha(@md_on_surface, 0.04); color: @md_on_surface_variant;
+    font-size: 13px; font-weight: 600;
+}
+.player-bar .speed-button:hover { background-color: alpha(@md_on_surface, 0.10); }
+.player-bar .speed-button:checked { background-color: @md_secondary_container; color: @md_on_secondary_container; }
+.playback-speed { min-width: 184px; padding: 8px; }
+.playback-speed .speed-heading { font-size: 13px; color: @md_on_surface_variant; margin: 4px 10px 8px; }
+.playback-speed .speed-preset {
+    min-height: 32px; padding: 4px 12px; border: none; border-radius: 8px;
+    color: @md_on_surface; font-size: 14px;
+}
+.playback-speed .speed-preset:checked { background-color: @md_secondary_container; color: @md_on_secondary_container; }
+.playback-speed .speed-fine { padding: 0 4px; }
+.playback-speed .speed-value { font-size: 14px; font-weight: 600; color: @md_on_surface; }
+.playback-speed .speed-step { min-width: 32px; min-height: 32px; padding: 0; border: none; border-radius: 16px; }
+.settings-page .settings-section-icon { -gtk-icon-style: symbolic; }
+popover.playback-speed-popover {
+    background-color: @md_surface_high; color: @md_on_surface;
+    border: 1px solid @md_outline_variant; border-radius: 16px;
+}
+
+.player-bar.compact .speed-button { min-width: 48px; padding: 0 6px; }
+.player-bar.compact .transport-button { min-width: 40px; }
+.player-bar.compact .transport-button.mode { min-width: 32px; }
+
+.lyrics-sync-mode { font-size: 12px; color: @md_on_surface_variant; }

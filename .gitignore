@@ -8,3 +8,9 @@
 *.part
 *.log
 *~
+__pycache__/
+*.py[cod]
+
+# Local working documents; only the user-facing README is public.
+*.md
+!/README.md

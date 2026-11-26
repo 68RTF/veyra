@@ -4,18 +4,38 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  ubuntu:
+  source:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: python3 scripts/check-source.py --self-test
+      - run: bash scripts/build-source.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: veyra-source
+          path: dist/*-source.tar.gz
+          if-no-files-found: error
+
+  ubuntu:
+    needs: source
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: veyra-source
+          path: source-artifact
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev pkg-config mpv ffmpeg curl xvfb imagemagick libsecret-tools
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev pkg-config mpv ffmpeg curl xvfb imagemagick cargo-1.85
       - uses: dtolnay/rust-toolchain@stable
       - name: Test
         run: |
@@ -24,43 +44,59 @@ jobs:
           cargo clippy --locked --all-targets -- -D warnings
           scripts/check-ui.sh
       - name: Build Ubuntu package
-        run: bash scripts/build-deb.sh ubuntu24.04
+        run: PATH="/usr/lib/rust-1.85/bin:$PATH" bash scripts/build-deb.sh ubuntu24.04 source-artifact/*-source.tar.gz
+      - name: Verify installed notices and source digest
+        run: bash scripts/check-package.sh dist/*.deb source-artifact/*-source.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: ubuntu-package
           path: dist/*.deb
 
   debian:
+    needs: source
     runs-on: ubuntu-24.04
     container: debian:13
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: veyra-source
+          path: source-artifact
       - name: Install build dependencies
         run: |
           apt-get update
-          apt-get install -y cargo rustc libgtk-3-dev pkg-config mpv ffmpeg curl dpkg-dev ca-certificates
+          apt-get install -y cargo rustc libgtk-3-dev pkg-config mpv ffmpeg curl dpkg-dev python3 ca-certificates
       - name: Test and build Debian package
         run: |
           cargo test --locked
-          bash scripts/build-deb.sh debian13
+          bash scripts/build-deb.sh debian13 source-artifact/*-source.tar.gz
+      - name: Verify installed notices and source digest
+        run: bash scripts/check-package.sh dist/*.deb source-artifact/*-source.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: debian-package
           path: dist/*.deb
 
   arch:
+    needs: source
     runs-on: ubuntu-24.04
     container: archlinux:base-devel
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: veyra-source
+          path: source-artifact
       - name: Install build dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed cargo gtk3 mpv ffmpeg curl pkgconf git
+          pacman -S --noconfirm --needed cargo gtk3 mpv ffmpeg curl pkgconf git python
           useradd -m builder
           chown -R builder:builder "$GITHUB_WORKSPACE"
       - name: Test and build Arch package
-        run: su builder -s /bin/bash -c "cd '$GITHUB_WORKSPACE' && cargo test --locked && bash scripts/build-arch.sh"
+        run: su builder -s /bin/bash -c "cd '$GITHUB_WORKSPACE' && cargo test --locked && bash scripts/build-arch.sh source-artifact/*-source.tar.gz"
+      - name: Verify installed notices and source digest
+        run: bash scripts/check-package.sh dist/*.pkg.tar.zst source-artifact/*-source.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: arch-package
@@ -68,6 +104,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
+    concurrency: release-${{ github.ref }}
     needs: [ubuntu, debian, arch]
     runs-on: ubuntu-24.04
     permissions:
@@ -75,15 +112,34 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: '*-package'
+          pattern: '*'
           merge-multiple: true
           path: dist
       - name: Publish release assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          source="dist/veyra-${GITHUB_REF_NAME#v}-source.tar.gz"
+          files=("$source" dist/*.deb dist/*.pkg.tar.zst)
+          [[ ${#files[@]} == 4 ]]
+          for file in "${files[@]}"; do test -s "$file"; done
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+            # A retry may fill missing assets, but must never mix two builds.
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" \
+              --jq '.assets[] | [.name, .digest] | @tsv' > existing-assets
+            missing=()
+            for file in "${files[@]}"; do
+              saved=$(awk -v name="${file##*/}" '$1 == name {print $2}' existing-assets)
+              if [[ -z "$saved" ]]; then
+                missing+=("$file")
+              else
+                actual=$(sha256sum < "$file" | cut -d' ' -f1)
+                [[ "$saved" == "sha256:$actual" ]] || { echo "Different asset already published: $file" >&2; exit 1; }
+              fi
+            done
+            for file in "${missing[@]}"; do
+              gh release upload "$GITHUB_REF_NAME" "$file" --repo "$GITHUB_REPOSITORY"
+            done
           else
-            gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --generate-notes
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
           fi
