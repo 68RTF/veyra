@@ -349,6 +349,9 @@ struct LookupCache {
 impl LookupCache {
     fn timing_is_current(&self) -> bool {
         let quality = crate::lyric_timing::quality(&self.lines);
+        if !self.lines.is_empty() && quality == 0 {
+            return false;
+        }
         self.quality.map_or_else(
             || {
                 // Older caches could assign a week-long TTL to partial or
@@ -1120,7 +1123,7 @@ fn cache_path(track: &Track) -> Option<PathBuf> {
 
 pub(crate) fn read_cache(track: &Track) -> Option<Vec<Lyric>> {
     let lines: Vec<Lyric> = serde_json::from_slice(&fs::read(cache_path(track)?).ok()?).ok()?;
-    (!lines.is_empty()).then_some(lines)
+    (crate::lyric_timing::quality(&lines) > 0).then_some(lines)
 }
 
 fn write_cache(track: &Track, lines: &[Lyric]) {
@@ -1250,6 +1253,41 @@ mod ranking_tests {
         );
         drop(search);
         assert_eq!(emissions, vec![partial]);
+    }
+
+    #[test]
+    fn blank_positive_cache_is_rechecked_but_negative_cache_is_kept() {
+        for raw in ["[00:01]", "[00:01]<00:01>", " "] {
+            for quality in [None, Some(0), Some(2)] {
+                let lines = if raw.trim().is_empty() {
+                    vec![Lyric {
+                        time: None,
+                        text: raw.into(),
+                    }]
+                } else {
+                    crate::library::parse_lyrics(raw)
+                };
+                let cache = LookupCache {
+                    identity: ("Song".into(), "Artist".into(), "".into(), 20),
+                    expires: 0,
+                    lines,
+                    error: None,
+                    quality,
+                };
+                assert!(
+                    !cache.timing_is_current(),
+                    "raw={raw:?} quality={quality:?}"
+                );
+            }
+        }
+        let cache = LookupCache {
+            identity: ("Song".into(), "Artist".into(), "".into(), 20),
+            expires: 0,
+            lines: vec![],
+            error: Some("not found".into()),
+            quality: Some(0),
+        };
+        assert!(cache.timing_is_current());
     }
 
     #[test]

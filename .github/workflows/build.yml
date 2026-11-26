@@ -89,8 +89,11 @@ jobs:
           path: source-artifact
       - name: Install build dependencies
         run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed cargo gtk3 mpv ffmpeg curl pkgconf git python
+          # The container's NoExtract rule also hides Rust's required license texts.
+          pacman-conf | sed '\|^NoExtract = usr/share/doc/\*$|d' > /tmp/veyra-pacman.conf
+          pacman --config /tmp/veyra-pacman.conf -Syu --noconfirm
+          pacman --config /tmp/veyra-pacman.conf -S --noconfirm cargo rust gtk3 mpv ffmpeg curl pkgconf git python
+          test -d /usr/share/doc/rustc/licenses
           useradd -m builder
           chown -R builder:builder "$GITHUB_WORKSPACE"
       - name: Test and build Arch package

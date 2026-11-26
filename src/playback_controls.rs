@@ -56,7 +56,7 @@ pub(super) fn build(model: &Rc<RefCell<Model>>) -> gtk::Widget {
     seek_row.pack_start(&duration, false, false, 0);
     seek_row.style_context().add_class("timeline");
 
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 4);
     let now_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     now_box.set_valign(gtk::Align::Center);
     now_box.style_context().add_class("now-playing");
@@ -271,6 +271,7 @@ pub(super) fn build(model: &Rc<RefCell<Model>>) -> gtk::Widget {
                 // Share spare compact-row width with the title rather than
                 // leaving all of it around the transport buttons.
                 row.set_child_packing(&now_box, compact, true, 0, gtk::PackType::Start);
+                row.set_spacing(if compact { 4 } else { 8 });
                 volume.set_width_request(if compact { 32 } else { 80 });
                 set_style_class(&panel, "compact", compact);
                 seek_row.show_all();
