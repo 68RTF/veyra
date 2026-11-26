@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="344" height="32" viewBox="0 0 344 32" role="img" aria-label="Linux, Rust, GTK 3, mpv">
+  <title>Linux · Rust · GTK 3 · mpv</title>
+  <g fill="#292332" stroke="#74618c">
+    <rect x="1" y="1" width="80" height="30" rx="15"/>
+    <rect x="89" y="1" width="72" height="30" rx="15"/>
+    <rect x="169" y="1" width="88" height="30" rx="15"/>
+    <rect x="265" y="1" width="78" height="30" rx="15"/>
+  </g>
+  <g fill="#eadff8" font-family="DejaVu Sans, sans-serif" font-size="12" text-anchor="middle">
+    <text x="41" y="21">Linux</text>
+    <text x="125" y="21">Rust</text>
+    <text x="213" y="21">GTK 3</text>
+    <text x="304" y="21">mpv</text>
+  </g>
+</svg>

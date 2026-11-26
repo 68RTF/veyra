@@ -2,17 +2,35 @@
   <img src="docs/veyra-logo.svg" alt="Veyra" width="560">
 </h1>
 
-Veyra — плеер локальной музыки для Linux с очередью, обложками и текстами песен.
+<p align="center">
+  плеер локальной музыки. тексты песен, обложки и немного винила.
+</p>
 
-[Скачать Veyra 0.8.0](https://github.com/68RTF/veyra/releases/tag/v0.8.0) · [Установка](#установка) · [Сборка](#сборка)
+<p align="center">
+  <img src="assets/readme-stack.svg" alt="Linux · Rust · GTK 3 · mpv" width="344">
+</p>
 
-![Veyra во время воспроизведения: обложка, очередь следующих треков и панель управления](docs/player.png)
+<p align="center">
+  <a href="https://github.com/68RTF/veyra/releases/latest"><b>скачать Veyra</b></a>
+  &nbsp;·&nbsp; <a href="#установка">установка</a>
+  &nbsp;·&nbsp; <a href="#сборка">собрать самому</a>
+</p>
+
+![Veyra: обложка, пластинка и очередь треков](docs/player.png)
+
+## что внутри
+
+| 🎵 музыка | 💬 тексты | 💿 обложки |
+| --- | --- | --- |
+| локальные файлы, очередь, поиск и перемешивание | текущая строка подсвечивается и следует за музыкой | обложки альбомов и пластинка, которая вращается во время воспроизведения |
+
+скорость, повтор и громкость настраиваются. очередь и настройки сохраняются между запусками.
 
 ## установка
 
-скачай пакет со [страницы релиза](https://github.com/68RTF/veyra/releases/tag/v0.8.0) и выполни команду в каталоге с ним. сборки — для x86-64.
+[готовые пакеты](https://github.com/68RTF/veyra/releases/latest) для x86-64:
 
-| Система | Команда |
+| система | команда |
 | --- | --- |
 | Arch Linux | `sudo pacman -U ./veyra-0.8.0-1-x86_64.pkg.tar.zst` |
 | Ubuntu 24.04 | `sudo apt install ./veyra_0.8.0_ubuntu24.04_amd64.deb` |
@@ -20,7 +38,7 @@ Veyra — плеер локальной музыки для Linux с очере�
 
 ## сборка
 
-нужны Rust/Cargo, заголовки GTK 3 и `pkg-config`. для работы плеера нужны GTK 3, mpv, FFmpeg с `ffprobe` и curl.
+нужны Rust/Cargo, заголовки GTK 3 и `pkg-config`. для работы плеера — mpv, FFmpeg с `ffprobe` и curl.
 
 ```sh
 cargo build --release --locked --bins
@@ -29,4 +47,4 @@ cargo build --release --locked --bins
 
 ## лицензия
 
-Copyright (C) 2026 68RTF. код и оригинальные ресурсы Veyra распространяются на условиях [GPL-3.0-only](LICENSE). для сторонних компонентов действуют их собственные лицензии.
+Copyright (C) 2026 68RTF. [GPL-3.0-only](LICENSE). для сторонних компонентов действуют их собственные лицензии.
